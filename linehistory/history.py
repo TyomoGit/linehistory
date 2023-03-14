@@ -7,6 +7,7 @@ import calendar
 import random
 import re
 from datetime import datetime
+from typing import Union
 
 class History:
     history_data: list[str]
@@ -37,7 +38,7 @@ class History:
 
         self.asterisk = asterisk
 
-    def search_by(self, arg: datetime | str = "") -> str:
+    def search_by(self, arg: Union[str, datetime] = "") -> str:
         """
         If a datetime type is entered, the search is performed on that date.
         If a str type is entered, the search is performed using the keyword.
