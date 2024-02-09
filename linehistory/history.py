@@ -9,11 +9,12 @@ import re
 from datetime import datetime
 from typing import Union
 
+DATE_PATTERN: str = r'^\d{4}/\d{2}/\d{2}\(.+\)$'
+YMD_PATTERN: str = "%Y/%m/%d"
+
 class History:
     history_data: list[str]
     asterisk: bool
-    DATE_PATTERN: str = r'^\d{4}/\d{2}/\d{2}\(.+\)$'
-    YMD_PATTERN: str = "%Y/%m/%d"
     
     def __init__(self, data: str, asterisk: bool = False) -> None:
         """
@@ -21,22 +22,20 @@ class History:
         If True, an asterisk is appended to each line of output.
         """
 
-        _data = data.splitlines()
+        lines = data.splitlines()
 
-        isFormal = False
-        for line in _data:
-            if re.match(self.DATE_PATTERN, line):
-                isFormal = True
-                break
-        if isFormal == False:
-            raise Exception("Invalid history data.")
-
-        if "のトーク履歴" in _data[0]:
-            self.history_data = _data[3:]
+        if "のトーク履歴" in lines[0]:
+            self.history_data = lines[3:]
         else:
-            self.history_data = _data
+            self.history_data = lines
 
         self.asterisk = asterisk
+    
+    @staticmethod
+    def of(path: str, asterisk: bool = False) -> "History":
+        with open(path, mode="r", encoding="utf-8") as f:
+            data = f.read()
+        return History(data=data, asterisk=asterisk)
 
     def search_by(self, arg: Union[str, datetime] = "") -> str:
         """
@@ -54,41 +53,40 @@ class History:
             raise Exception("invalid argument")
 
     def search_by_date(self, date: datetime) -> str:
-        date_input = date
+        target_date = date
         count_start: int = -1
-        count_stop: int = -1
-        count_flag: bool = False
+        count_end: int = -1
+        collect_flag: bool = False
         output: str = ""
 
         for i, line in enumerate(self.history_data):
-            if re.match(self.DATE_PATTERN, line):
-                date_tmp = datetime.strptime(line[:10], self.YMD_PATTERN)
+            if not re.match(DATE_PATTERN, line):
+                continue
 
-                if date_tmp == date_input:
-                    count_start = i
-                    count_flag = True
-                    output += f"{line}\n"
-                elif count_flag and date_input < date_tmp:
-                    count_stop = i
-                    break
-            elif count_flag:
-                output += f"{line}\n"
-                if i == len(self.history_data) - 1:
-                    count_stop = i
-                    break
+            current_date = datetime.strptime(line[:10], YMD_PATTERN)
+
+            if current_date == target_date:
+                count_start = i
+                collect_flag = True
+            elif collect_flag and target_date < current_date:
+                count_end = i-1
+                break
+        else:
+            count_end = len(self.history_data)
         
         if count_start == -1:
             output = "There is no history of this date.\n"
         else:
-            output += f"{count_stop - count_start}行\n"
+            output += "\n".join(self.history_data[count_start:count_end])
+            output += f"\n\n{count_end - count_start}行\n"
         return self.__make_output(data=output)
 
     def search_by_random(self) -> str:
         today: int = int(datetime.today().timestamp())
         first: int = 0
         for line in self.history_data:
-            if re.match(self.DATE_PATTERN, line):
-                first = int(datetime.strptime(line[:10], self.YMD_PATTERN).timestamp())
+            if re.match(DATE_PATTERN, line):
+                first = int(datetime.strptime(line[:10], YMD_PATTERN).timestamp())
                 break
 
         result: str = "There is no history of this date."
@@ -99,25 +97,28 @@ class History:
         return self.__make_output(data=result)
 
     def search_by_keyword(self, keyword: str) -> str:
+        LOWER_LIMIT = 1
+        if len(keyword) < LOWER_LIMIT:
+            return "Please enter more than one character."
+        
         count = 0
         output = ''
-        date = datetime(1,1,1)
-        LOWER_LIMIT = 1
-        if len(keyword) >= LOWER_LIMIT:
-            max_date = datetime.min
-            for line in self.history_data:
-                if re.match(self.DATE_PATTERN, line):
-                    if datetime.strptime(line[:10], self.YMD_PATTERN) >= max_date:
-                        date = datetime.strptime(line[:10], self.YMD_PATTERN)
-                        max_date = date
-                else:
-                    if keyword in line: #00:00 riku aaaa
-                        count += 1
-                        if re.match(r'^\d{2}:\d{2}.*', line):  #時刻を削除
-                            line = line[6:]
-                        if len(line) >= 61:
-                            line = line[:60] + '…'
-                        output += str(date)[:11].replace('-', '/') + " " + line + '\n'
+        max_date = datetime.min
+        for line in self.history_data:
+            if re.match(DATE_PATTERN, line):
+                date = datetime.strptime(line[:10], YMD_PATTERN)
+                if date >= max_date:
+                    max_date = date
+            else:
+                if not keyword in line:
+                    continue
+                count += 1
+                if re.match(r'^\d{2}:\d{2}.*', line):  #時刻を削除
+                    line = line[6:]
+                if len(line) >= 61:
+                    line = line[:60] + '…'
+                output += str(max_date)[:11].replace('-', '/') + " " + line + '\n'
+
         if output == '':
             output = 'Not found.'
 
@@ -135,8 +136,8 @@ class History:
 
         loop_flag: bool = False
         for i, line in enumerate(self.history_data):
-            if re.match(self.DATE_PATTERN, line):
-                _date = datetime.strptime(line[:10], self.YMD_PATTERN)
+            if re.match(DATE_PATTERN, line):
+                _date = datetime.strptime(line[:10], YMD_PATTERN)
                 if _date.year == _year and _date.month == _month:
                     loop_flag = True
                     days.append(_date.day)
@@ -145,6 +146,20 @@ class History:
         for day in days:
             cal = cal.replace(f" {day}", f"_{day}", 1)
         return cal
+
+    def range_after(self, date: datetime) -> str:
+        collecting = False
+
+        result_lines: list[str] = []
+        for line in self.history_data:
+            if re.match(DATE_PATTERN, line):
+                current_date = datetime.strptime(line[:10], YMD_PATTERN)
+                if current_date >= date:
+                    collecting = True
+            if collecting:
+                result_lines.append(line)
+        
+        return self.__make_output(data="\n".join(result_lines))
     
     def __make_output(self, data: str) -> str:
         if self.asterisk == True:
@@ -156,5 +171,5 @@ class History:
     def add_asterisk(message: str) -> str:
         result: str = ""
         for line in message.splitlines():
-            result += f"*{line}\n"
+            result += f"＊{line}\n"
         return result
