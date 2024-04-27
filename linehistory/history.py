@@ -9,13 +9,14 @@ import re
 from datetime import datetime
 from typing import Union
 
-DATE_PATTERN: str = r'^\d{4}/\d{2}/\d{2}\(.+\)$'
+DATE_PATTERN: str = r"^\d{4}/\d{2}/\d{2}\(.+\)$"
 YMD_PATTERN: str = "%Y/%m/%d"
+
 
 class History:
     history_data: list[str]
     asterisk: bool
-    
+
     def __init__(self, data: str, asterisk: bool = False) -> None:
         """
         asterisk:
@@ -30,7 +31,7 @@ class History:
             self.history_data = lines
 
         self.asterisk = asterisk
-    
+
     @staticmethod
     def of(path: str, asterisk: bool = False) -> "History":
         with open(path, mode="r", encoding="utf-8") as f:
@@ -69,11 +70,11 @@ class History:
                 count_start = i
                 collect_flag = True
             elif collect_flag and target_date < current_date:
-                count_end = i-1
+                count_end = i - 1
                 break
         else:
             count_end = len(self.history_data)
-        
+
         if count_start == -1:
             output = "There is no history of this date.\n"
         else:
@@ -100,9 +101,9 @@ class History:
         LOWER_LIMIT = 1
         if len(keyword) < LOWER_LIMIT:
             return "Please enter more than one character."
-        
+
         count = 0
-        output = ''
+        output = ""
         max_date = datetime.min
         for line in self.history_data:
             if re.match(DATE_PATTERN, line):
@@ -110,24 +111,24 @@ class History:
                 if date >= max_date:
                     max_date = date
             else:
-                if not keyword in line:
+                if keyword not in line:
                     continue
                 count += 1
-                if re.match(r'^\d{2}:\d{2}.*', line):  #時刻を削除
+                if re.match(r"^\d{2}:\d{2}.*", line):  # 時刻を削除
                     line = line[6:]
                 if len(line) >= 61:
-                    line = line[:60] + '…'
-                output += str(max_date)[:11].replace('-', '/') + " " + line + '\n'
+                    line = line[:60] + "…"
+                output += str(max_date)[:11].replace("-", "/") + " " + line + "\n"
 
-        if output == '':
-            output = 'Not found.'
+        if output == "":
+            output = "Not found."
 
-        return self.__make_output(data= f"{count}件\n{output}")
+        return self.__make_output(data=f"{count}件\n{output}")
 
     def create_calendar(self, month: datetime) -> str:
         if not isinstance(month, datetime):
             raise Exception("invalid argument.")
-        
+
         _year = month.year
         _month = month.month
         cal = calendar.month(_year, _month, w=4).replace(f" {_year}", f"_{_year}")
@@ -158,15 +159,15 @@ class History:
                     collecting = True
             if collecting:
                 result_lines.append(line)
-        
+
         return self.__make_output(data="\n".join(result_lines))
-    
+
     def __make_output(self, data: str) -> str:
-        if self.asterisk == True:
+        if self.asterisk:
             return History.add_asterisk(message=data)
         else:
             return data
-    
+
     @staticmethod
     def add_asterisk(message: str) -> str:
         result: str = ""
